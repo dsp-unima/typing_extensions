@@ -133,13 +133,13 @@ Example usage::
    False
    >>> is_literal(get_origin(typing.Literal[42]))
    True
-   >>> is_literal(get_origin(typing_extensions.Final[42]))
+   >>> is_literal(get_origin(typing_extensions.Final[int]))
    False
 
 Python version support
 ----------------------
 
-``typing_extensions`` currently supports Python versions 3.8 and higher. In the future,
+``typing_extensions`` currently supports Python versions 3.9 and higher. In the future,
 support for older Python versions will be dropped some time after that version
 reaches end of life.
 
@@ -255,7 +255,7 @@ Special typing primitives
 
 .. data:: NoDefault
 
-   See :py:class:`typing.NoDefault`. In ``typing`` since 3.13.0.
+   See :py:data:`typing.NoDefault`. In ``typing`` since 3.13.
 
    .. versionadded:: 4.12.0
 
@@ -341,7 +341,9 @@ Special typing primitives
 
 .. data:: ReadOnly
 
-   See :pep:`705`. Indicates that a :class:`TypedDict` item may not be modified.
+   See :py:data:`typing.ReadOnly` and :pep:`705`. In ``typing`` since 3.13.
+
+   Indicates that a :class:`TypedDict` item may not be modified.
 
    .. versionadded:: 4.9.0
 
@@ -379,7 +381,9 @@ Special typing primitives
 
 .. data:: TypeIs
 
-   See :pep:`742`. Similar to :data:`TypeGuard`, but allows more type narrowing.
+   See :py:data:`typing.TypeIs` and :pep:`742`. In ``typing`` since 3.13.
+
+   Similar to :data:`TypeGuard`, but allows more type narrowing.
 
    .. versionadded:: 4.10.0
 
@@ -405,8 +409,8 @@ Special typing primitives
    raises a :py:exc:`DeprecationWarning` when this syntax is used in Python 3.12
    or lower and fails with a :py:exc:`TypeError` in Python 3.13 and higher.
 
-   ``typing_extensions`` supports the experimental :data:`ReadOnly` qualifier
-   proposed by :pep:`705`. It is reflected in the following attributes:
+   ``typing_extensions`` supports the :data:`ReadOnly` qualifier
+   introduced by :pep:`705`. It is reflected in the following attributes:
 
    .. attribute:: __readonly_keys__
 
@@ -655,6 +659,18 @@ Protocols
 
    .. versionadded:: 4.6.0
 
+.. class:: Reader
+
+    See :py:class:`io.Reader`. Added to the standard library in Python 3.14.
+
+    .. versionadded:: 4.14.0
+
+.. class:: Writer
+
+    See :py:class:`io.Writer`. Added to the standard library in Python 3.14.
+
+    .. versionadded:: 4.14.0
+
 Decorators
 ~~~~~~~~~~
 
@@ -753,6 +769,37 @@ Functions
 
    .. versionadded:: 4.2.0
 
+.. function:: evaluate_forward_ref(forward_ref, *, owner=None, globals=None, locals=None, type_params=None, format=None)
+
+   Evaluate an :py:class:`typing.ForwardRef` as a :py:term:`type hint`.
+
+   This is similar to calling :py:meth:`annotationlib.ForwardRef.evaluate`,
+   but unlike that method, :func:`!evaluate_forward_ref` also:
+
+   * Recursively evaluates forward references nested within the type hint.
+     However, the amount of recursion is limited in Python 3.8 and 3.10.
+   * Raises :exc:`TypeError` when it encounters certain objects that are
+     not valid type hints.
+   * Replaces type hints that evaluate to :const:`!None` with
+     :class:`types.NoneType`.
+   * Supports the :attr:`Format.FORWARDREF` and
+     :attr:`Format.STRING` formats.
+
+   *forward_ref* must be an instance of :py:class:`typing.ForwardRef`.
+   *owner*, if given, should be the object that holds the annotations that
+   the forward reference derived from, such as a module, class object, or function.
+   It is used to infer the namespaces to use for looking up names.
+   *globals* and *locals* can also be explicitly given to provide
+   the global and local namespaces.
+   *type_params* is a tuple of :py:ref:`type parameters <type-params>` that
+   are in scope when evaluating the forward reference.
+   This parameter must be provided (though it may be an empty tuple) if *owner*
+   is not given and the forward reference does not already have an owner set.
+   *format* specifies the format of the annotation and is a member of
+   the :class:`Format` enum, defaulting to :attr:`Format.VALUE`.
+
+   .. versionadded:: 4.13.0
+
 .. function:: get_annotations(obj, *, globals=None, locals=None, eval_str=False, format=Format.VALUE)
 
    See :py:func:`inspect.get_annotations`. In the standard library since Python 3.10.
@@ -764,7 +811,7 @@ Functions
    of the :pep:`649` behavior on versions of Python that do not support it.
 
    The purpose of this backport is to allow users who would like to use
-   :attr:`Format.FORWARDREF` or :attr:`Format.SOURCE` semantics once
+   :attr:`Format.FORWARDREF` or :attr:`Format.STRING` semantics once
    :pep:`649` is implemented, but who also
    want to support earlier Python versions, to simply write::
 
@@ -811,6 +858,8 @@ Functions
 
 .. function:: get_protocol_members(tp)
 
+   See :py:func:`typing.get_protocol_members`. In ``typing`` since 3.13.
+
    Return the set of members defined in a :class:`Protocol`. This works with protocols
    defined using either :class:`typing.Protocol` or :class:`typing_extensions.Protocol`.
 
@@ -845,6 +894,8 @@ Functions
       :data:`ReadOnly` from the annotation.
 
 .. function:: is_protocol(tp)
+
+   See :py:func:`typing.is_protocol`. In ``typing`` since 3.13.
 
    Determine if a type is a :class:`Protocol`. This works with protocols
    defined using either :py:class:`typing.Protocol` or :class:`typing_extensions.Protocol`.
@@ -882,6 +933,15 @@ Functions
 
    .. versionadded:: 4.1.0
 
+.. function:: type_repr(value)
+
+   See :py:func:`annotationlib.type_repr`. In ``annotationlib`` since 3.14.
+
+   Convert an arbitrary Python value to a format suitable for use by
+   the :attr:`Format.STRING`.
+
+   .. versionadded:: 4.15.0
+
 Enums
 ~~~~~
 
@@ -901,9 +961,19 @@ Enums
       for the annotations. This format is identical to the return value for
       the function under earlier versions of Python.
 
+   .. attribute:: VALUE_WITH_FAKE_GLOBALS
+
+      Equal to 2. Special value used to signal that an annotate function is being
+      evaluated in a special environment with fake globals. When passed this
+      value, annotate functions should either return the same value as for
+      the :attr:`Format.VALUE` format, or raise :exc:`NotImplementedError`
+      to signal that they do not support execution in this environment.
+      This format is only used internally and should not be passed to
+      the functions in this module.
+
    .. attribute:: FORWARDREF
 
-      Equal to 2. When :pep:`649` is implemented, this format will attempt to return the
+      Equal to 3. When :pep:`649` is implemented, this format will attempt to return the
       conventional Python values for the annotations. However, if it encounters
       an undefined name, it dynamically creates a proxy object (a ForwardRef)
       that substitutes for that value in the expression.
@@ -911,9 +981,9 @@ Enums
       ``typing_extensions`` emulates this value on versions of Python which do
       not support :pep:`649` by returning the same value as for ``VALUE`` semantics.
 
-   .. attribute:: SOURCE
+   .. attribute:: STRING
 
-      Equal to 3. When :pep:`649` is implemented, this format will produce an annotation
+      Equal to 4. When :pep:`649` is implemented, this format will produce an annotation
       dictionary where the values have been replaced by strings containing
       an approximation of the original source code for the annotation expressions.
 
@@ -964,6 +1034,34 @@ Capsule objects
    guaranteed to exist on CPython.
 
    .. versionadded:: 4.12.0
+
+
+Sentinel objects
+~~~~~~~~~~~~~~~~
+
+.. class:: Sentinel(name, repr=None)
+
+   A type used to define sentinel values. The *name* argument should be the
+   name of the variable to which the return value shall be assigned.
+
+   If *repr* is provided, it will be used for the :meth:`~object.__repr__`
+   of the sentinel object. If not provided, ``"<name>"`` will be used.
+
+   Example::
+
+      >>> from typing_extensions import Sentinel, assert_type
+      >>> MISSING = Sentinel('MISSING')
+      >>> def func(arg: int | MISSING = MISSING) -> None:
+      ...     if arg is MISSING:
+      ...         assert_type(arg, MISSING)
+      ...     else:
+      ...         assert_type(arg, int)
+      ...
+      >>> func(MISSING)
+
+   .. versionadded:: 4.14.0
+
+      See :pep:`661`
 
 
 Pure aliases

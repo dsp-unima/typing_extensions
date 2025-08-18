@@ -24,6 +24,11 @@ Starting with version 4.0.0, `typing_extensions` uses
 [Semantic Versioning](https://semver.org/). See the documentation
 for more detail.
 
+## Development version
+After a release the version is increased once in [pyproject.toml](/pyproject.toml) and
+appended with a `.dev` suffix, e.g. `4.0.1.dev`.
+Further subsequent updates are not planned between releases.
+
 # Type stubs
 
 A stub file for `typing_extensions` is maintained
@@ -51,10 +56,35 @@ Running these commands in the `src/` directory ensures that the local file
 `typing_extensions.py` is used, instead of any other version of the library you
 may have installed.
 
+# Linting
+
+Linting is done via pre-commit. We recommend running pre-commit via a tool such
+as [uv](https://docs.astral.sh/uv/) or [pipx](https://pipx.pypa.io/stable/) so
+that pre-commit and its dependencies are installed into an isolated environment
+located outside your `typing_extensions` clone. Running pre-commit this way
+ensures that you don't accidentally install a version of `typing_extensions`
+from PyPI into a virtual environment inside your `typing_extensions` clone,
+which could easily happen if pre-commit depended (directly or indirectly) on
+`typing_extensions`. If a version of `typing_extensions` from PyPI *was*
+installed into a project-local virtual environment, it could lead to
+unpredictable results when running `typing_extensions` tests locally.
+
+To run the linters using uv:
+
+```
+uvx pre-commit run -a
+```
+
+Or using pipx:
+
+```
+pipx run pre-commit run -a
+```
+
 # Workflow for PyPI releases
 
 - Make sure you follow the versioning policy in the documentation
-  (e.g., release candidates before any feature release)
+  (e.g., release candidates before any feature release, do not release development versions)
 
 - Ensure that GitHub Actions reports no errors.
 
@@ -68,3 +98,5 @@ may have installed.
 
 - Release automation will finish the release. You'll have to manually
   approve the last step before upload.
+
+- After the release has been published on PyPI upgrade the version in number in [pyproject.toml](/pyproject.toml) to a `dev` version of the next planned release. For example, change 4.1.1 to 4.X.X.dev, see also [Development versions](#development-version). # TODO decide on major vs. minor increase.
