@@ -1,0 +1,47 @@
+name: Comment on the pull request
+
+# read-write repo token
+# access to secrets
+on:
+  workflow_run:
+    workflows: ["Test and lint"]
+    types:
+      - completed
+
+permissions: {}
+
+jobs:
+  cov-report:
+    permissions:
+        contents: read
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request'
+    steps:
+      - name: Download PR number
+        uses: actions/download-artifact@v4
+        with:
+            pattern: pr_number
+            path: .
+            github-token: ${{ secrets.GITHUB_TOKEN }}
+            run-id: ${{ github.event.workflow_run.id }}
+      - name: Extract PR number
+        id: pr_number
+        run: |
+          echo "PR number is:"
+          cat pr_number.txt
+          export "pr_number=$(cat pr_number.txt)"
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: code-coverage-results.md
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Add Coverage PR Comment
+        uses: marocchino/sticky-pull-request-comment@52423e01640425a022ef5fd42c6fb5f633a02728  # v2.9.3
+        if: github.event_name == 'pull_request'
+        with:
+          recreate: true
+          path: code-coverage-results.md
+          number: ${{ env.pr_number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
