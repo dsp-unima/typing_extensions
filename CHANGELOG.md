@@ -1,12 +1,38 @@
 # Unreleased
 
+- Add `typing_extensions.type_repr`, a backport of
+  [`annotationlib.type_repr`](https://docs.python.org/3.14/library/annotationlib.html#annotationlib.type_repr),
+  introduced in Python 3.14 (CPython PR [#124551](https://github.com/python/cpython/pull/124551),
+  originally by Jelle Zijlstra). Patch by Semyon Moroz.
+- Fix behavior of type params in `typing_extensions.evaluate_forward_ref`. Backport of
+  CPython PR [#137227](https://github.com/python/cpython/pull/137227) by Jelle Zijlstra.
+
+# Release 4.14.1 (July 4, 2025)
+
+- Fix usage of `typing_extensions.TypedDict` nested inside other types
+  (e.g., `typing.Type[typing_extensions.TypedDict]`). This is not allowed by the
+  type system but worked on older versions, so we maintain support.
+
+# Release 4.14.0 (June 2, 2025)
+
+Changes since 4.14.0rc1:
+
+- Remove `__or__` and `__ror__` methods from `typing_extensions.Sentinel`
+  on Python versions <3.10. PEP 604 was introduced in Python 3.10, and
+  `typing_extensions` does not generally attempt to backport PEP-604 methods
+  to prior versions.
+- Further update `typing_extensions.evaluate_forward_ref` with changes in Python 3.14.
+
+# Release 4.14.0rc1 (May 24, 2025)
+
 - Drop support for Python 3.8 (including PyPy-3.8). Patch by [Victorien Plot](https://github.com/Viicos).
 - Do not attempt to re-export names that have been removed from `typing`,
   anticipating the removal of `typing.no_type_check_decorator` in Python 3.15.
   Patch by Jelle Zijlstra.
-- Update `typing_extensions.Format` and `typing_extensions.evaluate_forward_ref` to align
-  with changes in Python 3.14. Patch by Jelle Zijlstra.
-- Fix tests for Python 3.14. Patch by Jelle Zijlstra.
+- Update `typing_extensions.Format`, `typing_extensions.evaluate_forward_ref`, and
+  `typing_extensions.TypedDict` to align
+  with changes in Python 3.14. Patches by Jelle Zijlstra.
+- Fix tests for Python 3.14 and 3.15. Patches by Jelle Zijlstra.
 
 New features:
 

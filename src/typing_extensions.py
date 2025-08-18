@@ -14,6 +14,7 @@ import types as _types
 import typing
 import warnings
 
+# Breakpoint: https://github.com/python/cpython/pull/119891
 if sys.version_info >= (3, 14):
     import annotationlib
 
@@ -100,6 +101,7 @@ __all__ = [
     'TypeGuard',
     'TypeIs',
     'TYPE_CHECKING',
+    'type_repr',
     'Never',
     'NoReturn',
     'ReadOnly',
@@ -151,6 +153,7 @@ __all__ = [
 # for backward compatibility
 PEP_560 = True
 GenericMeta = type
+# Breakpoint: https://github.com/python/cpython/pull/116129
 _PEP_696_IMPLEMENTED = sys.version_info >= (3, 13, 0, "beta")
 
 # Added with bpo-45166 to 3.10.1+ and some 3.9 versions
@@ -168,6 +171,7 @@ class _Sentinel:
 _marker = _Sentinel()
 
 
+# Breakpoint: https://github.com/python/cpython/pull/27342
 if sys.version_info >= (3, 10):
     def _should_collect_from_parameters(t):
         return isinstance(
@@ -189,6 +193,7 @@ T_co = typing.TypeVar('T_co', covariant=True)  # Any type covariant containers.
 T_contra = typing.TypeVar('T_contra', contravariant=True)  # Ditto contravariant.
 
 
+# Breakpoint: https://github.com/python/cpython/pull/31841
 if sys.version_info >= (3, 11):
     from typing import Any
 else:
@@ -221,7 +226,55 @@ else:
 
 ClassVar = typing.ClassVar
 
+# Vendored from cpython typing._SpecialFrom
+# Having a separate class means that instances will not be rejected by
+# typing._type_check.
+class _SpecialForm(typing._Final, _root=True):
+    __slots__ = ('_name', '__doc__', '_getitem')
 
+    def __init__(self, getitem):
+        self._getitem = getitem
+        self._name = getitem.__name__
+        self.__doc__ = getitem.__doc__
+
+    def __getattr__(self, item):
+        if item in {'__name__', '__qualname__'}:
+            return self._name
+
+        raise AttributeError(item)
+
+    def __mro_entries__(self, bases):
+        raise TypeError(f"Cannot subclass {self!r}")
+
+    def __repr__(self):
+        return f'typing_extensions.{self._name}'
+
+    def __reduce__(self):
+        return self._name
+
+    def __call__(self, *args, **kwds):
+        raise TypeError(f"Cannot instantiate {self!r}")
+
+    def __or__(self, other):
+        return typing.Union[self, other]
+
+    def __ror__(self, other):
+        return typing.Union[other, self]
+
+    def __instancecheck__(self, obj):
+        raise TypeError(f"{self} cannot be used with isinstance()")
+
+    def __subclasscheck__(self, cls):
+        raise TypeError(f"{self} cannot be used with issubclass()")
+
+    @typing._tp_cache
+    def __getitem__(self, parameters):
+        return self._getitem(self, parameters)
+
+
+# Note that inheriting from this class means that the object will be
+# rejected by typing._type_check, so do not use it if the special form
+# is arguably valid as a type by itself.
 class _ExtensionsSpecialForm(typing._SpecialForm, _root=True):
     def __repr__(self):
         return 'typing_extensions.' + self._name
@@ -229,6 +282,7 @@ class _ExtensionsSpecialForm(typing._SpecialForm, _root=True):
 
 Final = typing.Final
 
+# Breakpoint: https://github.com/python/cpython/pull/30530
 if sys.version_info >= (3, 11):
     final = typing.final
 else:
@@ -272,6 +326,7 @@ def IntVar(name):
 
 
 # A Literal bug was fixed in 3.11.0, 3.10.1 and 3.9.8
+# Breakpoint: https://github.com/python/cpython/pull/29334
 if sys.version_info >= (3, 10, 1):
     Literal = typing.Literal
 else:
@@ -432,6 +487,7 @@ Text = typing.Text
 TYPE_CHECKING = typing.TYPE_CHECKING
 
 
+# Breakpoint: https://github.com/python/cpython/pull/118681
 if sys.version_info >= (3, 13, 0, "beta"):
     from typing import AsyncContextManager, AsyncGenerator, ContextManager, Generator
 else:
@@ -528,19 +584,25 @@ def _get_protocol_attrs(cls):
     return attrs
 
 
-def _caller(depth=2):
+def _caller(depth=1, default='__main__'):
     try:
-        return sys._getframe(depth).f_globals.get('__name__', '__main__')
+        return sys._getframemodulename(depth + 1) or default
+    except AttributeError:  # For platforms without _getframemodulename()
+        pass
+    try:
+        return sys._getframe(depth + 1).f_globals.get('__name__', default)
     except (AttributeError, ValueError):  # For platforms without _getframe()
-        return None
+        pass
+    return None
 
 
 # `__match_args__` attribute was removed from protocol members in 3.13,
 # we want to backport this change to older Python versions.
+# Breakpoint: https://github.com/python/cpython/pull/110683
 if sys.version_info >= (3, 13):
     Protocol = typing.Protocol
 else:
-    def _allow_reckless_class_checks(depth=3):
+    def _allow_reckless_class_checks(depth=2):
         """Allow instance and class checks for special stdlib modules.
         The abc and functools modules indiscriminately call isinstance() and
         issubclass() on the whole MRO of a user class, which may contain protocols.
@@ -717,6 +779,7 @@ else:
                 cls.__init__ = _no_init
 
 
+# Breakpoint: https://github.com/python/cpython/pull/113401
 if sys.version_info >= (3, 13):
     runtime_checkable = typing.runtime_checkable
 else:
@@ -777,6 +840,7 @@ runtime = runtime_checkable
 
 
 # Our version of runtime-checkable protocols is faster on Python <=3.11
+# Breakpoint: https://github.com/python/cpython/pull/112717
 if sys.version_info >= (3, 12):
     SupportsInt = typing.SupportsInt
     SupportsFloat = typing.SupportsFloat
@@ -1011,6 +1075,8 @@ else:
             else:
                 generic_base = ()
 
+            ns_annotations = ns.pop('__annotations__', None)
+
             # typing.py generally doesn't let you inherit from plain Generic, unless
             # the name of the class happens to be "Protocol"
             tp_dict = type.__new__(_TypedDictMeta, "Protocol", (*generic_base, dict), ns)
@@ -1023,8 +1089,8 @@ else:
 
             annotations = {}
             own_annotate = None
-            if "__annotations__" in ns:
-                own_annotations = ns["__annotations__"]
+            if ns_annotations is not None:
+                own_annotations = ns_annotations
             elif sys.version_info >= (3, 14):
                 if hasattr(annotationlib, "get_annotate_from_class_namespace"):
                     own_annotate = annotationlib.get_annotate_from_class_namespace(ns)
@@ -1104,6 +1170,7 @@ else:
                     mutable_keys.add(annotation_key)
                     readonly_keys.discard(annotation_key)
 
+            # Breakpoint: https://github.com/python/cpython/pull/119891
             if sys.version_info >= (3, 14):
                 def __annotate__(format):
                     annos = {}
@@ -1114,7 +1181,7 @@ else:
                         if base_annotate is None:
                             continue
                         base_annos = annotationlib.call_annotate_function(
-                            base.__annotate__, format, owner=base)
+                            base_annotate, format, owner=base)
                         annos.update(base_annos)
                     if own_annotate is not None:
                         own = annotationlib.call_annotate_function(
@@ -1194,6 +1261,7 @@ else:
             raise TypeError("TypedDict takes either a dict or keyword arguments,"
                             " but not both")
         if kwargs:
+            # Breakpoint: https://github.com/python/cpython/pull/104891
             if sys.version_info >= (3, 13):
                 raise TypeError("TypedDict takes no keyword arguments")
             warnings.warn(
@@ -1205,7 +1273,7 @@ else:
             )
 
         ns = {'__annotations__': dict(fields)}
-        module = _caller(depth=5 if typing_is_inline else 3)
+        module = _caller(depth=4 if typing_is_inline else 2)
         if module is not None:
             # Setting correct module is necessary to make typed dict classes
             # pickleable.
@@ -1216,7 +1284,7 @@ else:
         td.__orig_bases__ = (TypedDict,)
         return td
 
-    class _TypedDictSpecialForm(_ExtensionsSpecialForm, _root=True):
+    class _TypedDictSpecialForm(_SpecialForm, _root=True):
         def __call__(
             self,
             typename,
@@ -1403,6 +1471,7 @@ else:  # <=3.13
         hint = typing.get_type_hints(
             obj, globalns=globalns, localns=localns, include_extras=True
         )
+        # Breakpoint: https://github.com/python/cpython/pull/30304
         if sys.version_info < (3, 11):
             _clean_optional(obj, hint, globalns, localns)
         if include_extras:
@@ -1475,7 +1544,8 @@ else:  # <=3.13
 
 # Python 3.9 has get_origin() and get_args() but those implementations don't support
 # ParamSpecArgs and ParamSpecKwargs, so only Python 3.10's versions will do.
-if sys.version_info[:2] >= (3, 10):
+# Breakpoint: https://github.com/python/cpython/pull/25298
+if sys.version_info >= (3, 10):
     get_origin = typing.get_origin
     get_args = typing.get_args
 # 3.9
@@ -1552,7 +1622,7 @@ def _set_default(type_param, default):
 
 def _set_module(typevarlike):
     # for pickling:
-    def_mod = _caller(depth=3)
+    def_mod = _caller(depth=2)
     if def_mod != 'typing_extensions':
         typevarlike.__module__ = def_mod
 
@@ -2041,6 +2111,7 @@ def _concatenate_getitem(self, parameters):
 
 
 # 3.11+; Concatenate does not accept ellipsis in 3.10
+# Breakpoint: https://github.com/python/cpython/pull/30969
 if sys.version_info >= (3, 11):
     Concatenate = typing.Concatenate
 # <=3.10
@@ -2194,48 +2265,6 @@ else:
         return typing._GenericAlias(self, (item,))
 
 
-# Vendored from cpython typing._SpecialFrom
-class _SpecialForm(typing._Final, _root=True):
-    __slots__ = ('_name', '__doc__', '_getitem')
-
-    def __init__(self, getitem):
-        self._getitem = getitem
-        self._name = getitem.__name__
-        self.__doc__ = getitem.__doc__
-
-    def __getattr__(self, item):
-        if item in {'__name__', '__qualname__'}:
-            return self._name
-
-        raise AttributeError(item)
-
-    def __mro_entries__(self, bases):
-        raise TypeError(f"Cannot subclass {self!r}")
-
-    def __repr__(self):
-        return f'typing_extensions.{self._name}'
-
-    def __reduce__(self):
-        return self._name
-
-    def __call__(self, *args, **kwds):
-        raise TypeError(f"Cannot instantiate {self!r}")
-
-    def __or__(self, other):
-        return typing.Union[self, other]
-
-    def __ror__(self, other):
-        return typing.Union[other, self]
-
-    def __instancecheck__(self, obj):
-        raise TypeError(f"{self} cannot be used with isinstance()")
-
-    def __subclasscheck__(self, cls):
-        raise TypeError(f"{self} cannot be used with issubclass()")
-
-    @typing._tp_cache
-    def __getitem__(self, parameters):
-        return self._getitem(self, parameters)
 
 
 if hasattr(typing, "LiteralString"):  # 3.11+
@@ -2419,7 +2448,9 @@ For more information, see PEP 646 and PEP 692.
 """
 
 
-if sys.version_info >= (3, 12):  # PEP 692 changed the repr of Unpack[]
+# PEP 692 changed the repr of Unpack[]
+# Breakpoint: https://github.com/python/cpython/pull/104048
+if sys.version_info >= (3, 12):
     Unpack = typing.Unpack
 
     def _is_unpack(obj):
@@ -2682,8 +2713,9 @@ else:  # <=3.10
         raise AssertionError(f"Expected code to be unreachable, but got: {value}")
 
 
+# dataclass_transform exists in 3.11 but lacks the frozen_default parameter
+# Breakpoint: https://github.com/python/cpython/pull/99958
 if sys.version_info >= (3, 12):  # 3.12+
-    # dataclass_transform exists in 3.11 but lacks the frozen_default parameter
     dataclass_transform = typing.dataclass_transform
 else:  # <=3.11
     def dataclass_transform(
@@ -2814,6 +2846,7 @@ else:  # <=3.11
 
 
 # Python 3.13.3+ contains a fix for the wrapped __new__
+# Breakpoint: https://github.com/python/cpython/pull/132160
 if sys.version_info >= (3, 13, 3):
     deprecated = warnings.deprecated
 else:
@@ -2943,6 +2976,7 @@ else:
                     return arg(*args, **kwargs)
 
                 if asyncio.coroutines.iscoroutinefunction(arg):
+                    # Breakpoint: https://github.com/python/cpython/pull/99247
                     if sys.version_info >= (3, 12):
                         wrapper = inspect.markcoroutinefunction(wrapper)
                     else:
@@ -2956,6 +2990,7 @@ else:
                     f"a class or callable, not {arg!r}"
                 )
 
+# Breakpoint: https://github.com/python/cpython/pull/23702
 if sys.version_info < (3, 10):
     def _is_param_expr(arg):
         return arg is ... or isinstance(
@@ -3032,6 +3067,7 @@ if not hasattr(typing, "TypeVarTuple"):
 
                     expect_val = f"at least {elen}"
 
+            # Breakpoint: https://github.com/python/cpython/pull/27515
             things = "arguments" if sys.version_info >= (3, 10) else "parameters"
             raise TypeError(f"Too {'many' if alen > elen else 'few'} {things}"
                             f" for {cls}; actual {alen}, expected {expect_val}")
@@ -3225,6 +3261,7 @@ else:
 # This was explicitly disallowed in 3.9-3.10, and only half-worked in <=3.8.
 # On 3.12, we added __orig_bases__ to call-based NamedTuples
 # On 3.13, we deprecated kwargs-based NamedTuples
+# Breakpoint: https://github.com/python/cpython/pull/105609
 if sys.version_info >= (3, 13):
     NamedTuple = typing.NamedTuple
 else:
@@ -3300,6 +3337,7 @@ else:
                             # using add_note() until py312.
                             # Making sure exceptions are raised in the same way
                             # as in "normal" classes seems most important here.
+                            # Breakpoint: https://github.com/python/cpython/pull/95915
                             if sys.version_info >= (3, 12):
                                 e.add_note(msg)
                                 raise
@@ -3448,6 +3486,7 @@ else:
 
 # NewType is a class on Python 3.10+, making it pickleable
 # The error message for subclassing instances of NewType was improved on 3.11+
+# Breakpoint: https://github.com/python/cpython/pull/30268
 if sys.version_info >= (3, 11):
     NewType = typing.NewType
 else:
@@ -3500,6 +3539,7 @@ else:
         def __reduce__(self):
             return self.__qualname__
 
+        # Breakpoint: https://github.com/python/cpython/pull/21515
         if sys.version_info >= (3, 10):
             # PEP 604 methods
             # It doesn't make sense to have these methods on Python <3.10
@@ -3511,10 +3551,12 @@ else:
                 return typing.Union[other, self]
 
 
+# Breakpoint: https://github.com/python/cpython/pull/124795
 if sys.version_info >= (3, 14):
     TypeAliasType = typing.TypeAliasType
 # <=3.13
 else:
+    # Breakpoint: https://github.com/python/cpython/pull/103764
     if sys.version_info >= (3, 12):
         # 3.12-3.13
         def _is_unionable(obj):
@@ -3710,6 +3752,7 @@ else:
         def __call__(self):
             raise TypeError("Type alias is not callable")
 
+        # Breakpoint: https://github.com/python/cpython/pull/21515
         if sys.version_info >= (3, 10):
             def __or__(self, right):
                 # For forward compatibility with 3.12, reject Unions
@@ -3822,15 +3865,19 @@ if _CapsuleType is not None:
     __all__.append("CapsuleType")
 
 
-if sys.version_info >= (3,14):
+if sys.version_info >= (3, 14):
     from annotationlib import Format, get_annotations
 else:
+    # Available since Python 3.14.0a3
+    # PR: https://github.com/python/cpython/pull/124415
     class Format(enum.IntEnum):
         VALUE = 1
         VALUE_WITH_FAKE_GLOBALS = 2
         FORWARDREF = 3
         STRING = 4
 
+    # Available since Python 3.14.0a1
+    # PR: https://github.com/python/cpython/pull/119891
     def get_annotations(obj, *, globals=None, locals=None, eval_str=False,
                         format=Format.VALUE):
         """Compute the annotations dict for an object.
@@ -4018,23 +4065,13 @@ else:
             # as a way of emulating annotation scopes when calling `eval()`
             type_params = getattr(owner, "__type_params__", None)
 
-        # type parameters require some special handling,
-        # as they exist in their own scope
-        # but `eval()` does not have a dedicated parameter for that scope.
-        # For classes, names in type parameter scopes should override
-        # names in the global scope (which here are called `localns`!),
-        # but should in turn be overridden by names in the class scope
-        # (which here are called `globalns`!)
+        # Type parameters exist in their own scope, which is logically
+        # between the locals and the globals. We simulate this by adding
+        # them to the globals.
         if type_params is not None:
             globals = dict(globals)
-            locals = dict(locals)
             for param in type_params:
-                param_name = param.__name__
-                if (
-                    _FORWARD_REF_HAS_CLASS and not forward_ref.__forward_is_class__
-                ) or param_name not in globals:
-                    globals[param_name] = param
-                    locals.pop(param_name, None)
+                globals[param.__name__] = param
 
         arg = forward_ref.__forward_arg__
         if arg.isidentifier() and not keyword.iskeyword(arg):
@@ -4052,57 +4089,6 @@ else:
         forward_ref.__forward_evaluated__ = True
         forward_ref.__forward_value__ = value
         return value
-
-    def _lax_type_check(
-        value, msg, is_argument=True, *, module=None, allow_special_forms=False
-    ):
-        """
-        A lax Python 3.11+ like version of typing._type_check
-        """
-        if hasattr(typing, "_type_convert"):
-            if (
-                sys.version_info >= (3, 10, 3)
-                or (3, 9, 10) < sys.version_info[:3] < (3, 10)
-            ):
-                # allow_special_forms introduced later cpython/#30926 (bpo-46539)
-                type_ = typing._type_convert(
-                    value,
-                    module=module,
-                    allow_special_forms=allow_special_forms,
-                )
-            # module was added with bpo-41249 before is_class (bpo-46539)
-            elif "__forward_module__" in typing.ForwardRef.__slots__:
-                type_ = typing._type_convert(value, module=module)
-            else:
-                type_ = typing._type_convert(value)
-        else:
-            if value is None:
-                return type(None)
-            if isinstance(value, str):
-                return ForwardRef(value)
-            type_ = value
-        invalid_generic_forms = (Generic, Protocol)
-        if not allow_special_forms:
-            invalid_generic_forms += (ClassVar,)
-            if is_argument:
-                invalid_generic_forms += (Final,)
-        if (
-            isinstance(type_, typing._GenericAlias)
-            and get_origin(type_) in invalid_generic_forms
-        ):
-            raise TypeError(f"{type_} is not valid as type argument") from None
-        if type_ in (Any, LiteralString, NoReturn, Never, Self, TypeAlias):
-            return type_
-        if allow_special_forms and type_ in (ClassVar, Final):
-            return type_
-        if (
-            isinstance(type_, (_SpecialForm, typing._SpecialForm))
-            or type_ in (Generic, Protocol)
-        ):
-            raise TypeError(f"Plain {type_} is not valid as type argument") from None
-        if type(type_) is tuple:  # lax version with tuple instead of callable
-            raise TypeError(f"{msg} Got {type_!r:.100}.")
-        return type_
 
     def evaluate_forward_ref(
         forward_ref,
@@ -4156,24 +4142,15 @@ else:
             else:
                 raise
 
-        msg = "Forward references must evaluate to types."
-        if not _FORWARD_REF_HAS_CLASS:
-            allow_special_forms = not forward_ref.__forward_is_argument__
-        else:
-            allow_special_forms = forward_ref.__forward_is_class__
-        type_ = _lax_type_check(
-            value,
-            msg,
-            is_argument=forward_ref.__forward_is_argument__,
-            allow_special_forms=allow_special_forms,
-        )
+        if isinstance(value, str):
+            value = ForwardRef(value)
 
         # Recursively evaluate the type
-        if isinstance(type_, ForwardRef):
-            if getattr(type_, "__forward_module__", True) is not None:
+        if isinstance(value, ForwardRef):
+            if getattr(value, "__forward_module__", True) is not None:
                 globals = None
             return evaluate_forward_ref(
-                type_,
+                value,
                 globals=globals,
                 locals=locals,
                  type_params=type_params, owner=owner,
@@ -4187,28 +4164,19 @@ else:
                     locals[tvar.__name__] = tvar
         if sys.version_info < (3, 12, 5):
             return typing._eval_type(
-                type_,
+                value,
                 globals,
                 locals,
                 recursive_guard=_recursive_guard | {forward_ref.__forward_arg__},
             )
-        if sys.version_info < (3, 14):
+        else:
             return typing._eval_type(
-                type_,
+                value,
                 globals,
                 locals,
                 type_params,
                 recursive_guard=_recursive_guard | {forward_ref.__forward_arg__},
             )
-        return typing._eval_type(
-            type_,
-            globals,
-            locals,
-            type_params,
-            recursive_guard=_recursive_guard | {forward_ref.__forward_arg__},
-            format=format,
-            owner=owner,
-        )
 
 
 class Sentinel:
@@ -4237,14 +4205,36 @@ class Sentinel:
         def __call__(self, *args, **kwargs):
             raise TypeError(f"{type(self).__name__!r} object is not callable")
 
-    def __or__(self, other):
-        return typing.Union[self, other]
+    # Breakpoint: https://github.com/python/cpython/pull/21515
+    if sys.version_info >= (3, 10):
+        def __or__(self, other):
+            return typing.Union[self, other]
 
-    def __ror__(self, other):
-        return typing.Union[other, self]
+        def __ror__(self, other):
+            return typing.Union[other, self]
 
     def __getstate__(self):
         raise TypeError(f"Cannot pickle {type(self).__name__!r} object")
+
+
+if sys.version_info >= (3, 14, 0, "beta"):
+    type_repr = annotationlib.type_repr
+else:
+    def type_repr(value):
+        """Convert a Python value to a format suitable for use with the STRING format.
+
+        This is intended as a helper for tools that support the STRING format but do
+        not have access to the code that originally produced the annotations. It uses
+        repr() for most objects.
+
+        """
+        if isinstance(value, (type, _types.FunctionType, _types.BuiltinFunctionType)):
+            if value.__module__ == "builtins":
+                return value.__qualname__
+            return f"{value.__module__}.{value.__qualname__}"
+        if value is ...:
+            return "..."
+        return repr(value)
 
 
 # Aliases for items that are in typing in all supported versions.

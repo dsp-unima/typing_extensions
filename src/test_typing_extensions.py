@@ -101,6 +101,7 @@ from typing_extensions import (
     reveal_type,
     runtime,
     runtime_checkable,
+    type_repr,
 )
 
 NoneType = type(None)
@@ -525,7 +526,7 @@ class BottomTypeTestsMixin:
             type(self.bottom_type)()
 
     def test_pickle(self):
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             pickled = pickle.dumps(self.bottom_type, protocol=proto)
             self.assertIs(self.bottom_type, pickle.loads(pickled))
 
@@ -1207,13 +1208,15 @@ class LiteralTests(BaseTestCase):
 
         self.assertEqual(Literal[My.A].__args__, (My.A,))
 
-    def test_illegal_parameters_do_not_raise_runtime_errors(self):
+    def test_strange_parameters_are_allowed(self):
+        # These are explicitly allowed by the typing spec
+        Literal[Literal[1, 2], Literal[4, 5]]
+        Literal[b"foo", "bar"]
+
         # Type checkers should reject these types, but we do not
         # raise errors at runtime to maintain maximum flexibility
         Literal[int]
-        Literal[Literal[1, 2], Literal[4, 5]]
         Literal[3j + 2, ..., ()]
-        Literal[b"foo", "bar"]
         Literal[{"foo": 3, "bar": 4}]
         Literal[T]
 
@@ -4202,6 +4205,12 @@ class TypedDictTests(BaseTestCase):
         self.assertEqual(Emp.__annotations__, {'name': str, 'id': int})
         self.assertEqual(Emp.__total__, True)
 
+    def test_allowed_as_type_argument(self):
+        # https://github.com/python/typing_extensions/issues/613
+        obj = typing.Type[typing_extensions.TypedDict]
+        self.assertIs(typing_extensions.get_origin(obj), type)
+        self.assertEqual(typing_extensions.get_args(obj), (typing_extensions.TypedDict,))
+
     @skipIf(sys.version_info < (3, 13), "Change in behavior in 3.13")
     def test_keywords_syntax_raises_on_3_13(self):
         with self.assertRaises(TypeError), self.assertWarns(DeprecationWarning):
@@ -4401,6 +4410,39 @@ class TypedDictTests(BaseTestCase):
             'tail': bool,
             'voice': str,
         }
+
+    @skipIf(sys.version_info == (3, 14, 0, "beta", 1), "Broken on beta 1, fixed in beta 2")
+    def test_inheritance_pep563(self):
+        def _make_td(future, class_name, annos, base, extra_names=None):
+            lines = []
+            if future:
+                lines.append('from __future__ import annotations')
+            lines.append('from typing import TypedDict')
+            lines.append(f'class {class_name}({base}):')
+            for name, anno in annos.items():
+                lines.append(f'    {name}: {anno}')
+            code = '\n'.join(lines)
+            ns = {**extra_names} if extra_names else {}
+            exec(code, ns)
+            return ns[class_name]
+
+        for base_future in (True, False):
+            for child_future in (True, False):
+                with self.subTest(base_future=base_future, child_future=child_future):
+                    base = _make_td(
+                        base_future, "Base", {"base": "int"}, "TypedDict"
+                    )
+                    if sys.version_info >= (3, 14):
+                        self.assertIsNotNone(base.__annotate__)
+                    child = _make_td(
+                        child_future, "Child", {"child": "int"}, "Base", {"Base": base}
+                    )
+                    base_anno = typing.ForwardRef("int", module="builtins") if base_future else int
+                    child_anno = typing.ForwardRef("int", module="builtins") if child_future else int
+                    self.assertEqual(base.__annotations__, {'base': base_anno})
+                    self.assertEqual(
+                        child.__annotations__, {'child': child_anno, 'base': base_anno}
+                    )
 
     def test_required_notrequired_keys(self):
         self.assertEqual(NontotalMovie.__required_keys__,
@@ -5251,6 +5293,8 @@ class TypedDictTests(BaseTestCase):
              'z': 'Required[undefined]'},
         )
 
+    def test_dunder_dict(self):
+        self.assertIsInstance(TypedDict.__dict__, dict)
 
 class AnnotatedTests(BaseTestCase):
 
@@ -5863,7 +5907,7 @@ class ParamSpecTests(BaseTestCase):
         P_co = ParamSpec('P_co', covariant=True)
         P_contra = ParamSpec('P_contra', contravariant=True)
         P_default = ParamSpec('P_default', default=[int])
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             with self.subTest(f'Pickle protocol {proto}'):
                 for paramspec in (P, P_co, P_contra, P_default):
                     z = pickle.loads(pickle.dumps(paramspec, proto))
@@ -6286,7 +6330,7 @@ class LiteralStringTests(BaseTestCase):
         self.assertIs(StrT.__bound__, LiteralString)
 
     def test_pickle(self):
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             pickled = pickle.dumps(LiteralString, protocol=proto)
             self.assertIs(LiteralString, pickle.loads(pickled))
 
@@ -6333,7 +6377,7 @@ class SelfTests(BaseTestCase):
                 return (self, self)
 
     def test_pickle(self):
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             pickled = pickle.dumps(Self, protocol=proto)
             self.assertIs(Self, pickle.loads(pickled))
 
@@ -6545,7 +6589,7 @@ class TypeVarTupleTests(BaseTestCase):
         Ts = TypeVarTuple('Ts')
         Ts_default = TypeVarTuple('Ts_default', default=Unpack[Tuple[int, str]])
 
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             for typevartuple in (Ts, Ts_default):
                 z = pickle.loads(pickle.dumps(typevartuple, proto))
                 self.assertEqual(z.__name__, typevartuple.__name__)
@@ -7014,6 +7058,7 @@ class NamedTupleTests(BaseTestCase):
         self.assertIs(type(a), Group)
         self.assertEqual(a, (1, [2]))
 
+    @skipUnless(sys.version_info <= (3, 15), "Behavior removed in 3.15")
     def test_namedtuple_keyword_usage(self):
         with self.assertWarnsRegex(
             DeprecationWarning,
@@ -7049,6 +7094,7 @@ class NamedTupleTests(BaseTestCase):
         ):
             NamedTuple('Name', None, x=int)
 
+    @skipUnless(sys.version_info <= (3, 15), "Behavior removed in 3.15")
     def test_namedtuple_special_keyword_names(self):
         with self.assertWarnsRegex(
             DeprecationWarning,
@@ -7064,6 +7110,7 @@ class NamedTupleTests(BaseTestCase):
         self.assertEqual(a.typename, 'foo')
         self.assertEqual(a.fields, [('bar', tuple)])
 
+    @skipUnless(sys.version_info <= (3, 15), "Behavior removed in 3.15")
     def test_empty_namedtuple(self):
         expected_warning = re.escape(
             "Failing to pass a value for the 'fields' parameter is deprecated "
@@ -7553,7 +7600,7 @@ class TypeVarLikeDefaultsTests(BaseTestCase):
         U_co = typing_extensions.TypeVar('U_co', covariant=True)
         U_contra = typing_extensions.TypeVar('U_contra', contravariant=True)
         U_default = typing_extensions.TypeVar('U_default', default=int)
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             for typevar in (U, U_co, U_contra, U_default):
                 z = pickle.loads(pickle.dumps(typevar, proto))
                 self.assertEqual(z.__name__, typevar.__name__)
@@ -7702,7 +7749,7 @@ class TypeVarInferVarianceTests(BaseTestCase):
         global U, U_infer  # pickle wants to reference the class by name
         U = typing_extensions.TypeVar('U')
         U_infer = typing_extensions.TypeVar('U_infer', infer_variance=True)
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             for typevar in (U, U_infer):
                 z = pickle.loads(pickle.dumps(typevar, proto))
                 self.assertEqual(z.__name__, typevar.__name__)
@@ -8307,7 +8354,7 @@ class DocTests(BaseTestCase):
 
     def test_pickle(self):
         doc_info = Doc("Who to say hi to")
-        for proto in range(pickle.HIGHEST_PROTOCOL):
+        for proto in range(pickle.HIGHEST_PROTOCOL + 1):
             pickled = pickle.dumps(doc_info, protocol=proto)
             self.assertEqual(doc_info, pickle.loads(pickled))
 
@@ -8320,6 +8367,44 @@ class CapsuleTypeTests(BaseTestCase):
     def test_capsule_type(self):
         import _datetime
         self.assertIsInstance(_datetime.datetime_CAPI, typing_extensions.CapsuleType)
+
+
+class MyClass:
+    def __repr__(self):
+        return "my repr"
+
+
+class TestTypeRepr(BaseTestCase):
+    def test_custom_types(self):
+
+        class Nested:
+            pass
+
+        def nested():
+            pass
+
+        self.assertEqual(type_repr(MyClass), f"{__name__}.MyClass")
+        self.assertEqual(
+            type_repr(Nested),
+            f"{__name__}.TestTypeRepr.test_custom_types.<locals>.Nested",
+        )
+        self.assertEqual(
+            type_repr(nested),
+            f"{__name__}.TestTypeRepr.test_custom_types.<locals>.nested",
+        )
+        self.assertEqual(type_repr(times_three), f"{__name__}.times_three")
+        self.assertEqual(type_repr(Format.VALUE), repr(Format.VALUE))
+        self.assertEqual(type_repr(MyClass()), "my repr")
+
+    def test_builtin_types(self):
+        self.assertEqual(type_repr(int), "int")
+        self.assertEqual(type_repr(object), "object")
+        self.assertEqual(type_repr(None), "None")
+        self.assertEqual(type_repr(len), "len")
+        self.assertEqual(type_repr(1), "1")
+        self.assertEqual(type_repr("1"), "'1'")
+        self.assertEqual(type_repr(''), "''")
+        self.assertEqual(type_repr(...), "...")
 
 
 def times_three(fn):
@@ -8908,7 +8993,147 @@ class TestGetAnnotationsWithPEP695(BaseTestCase):
             set(results.generic_func.__type_params__)
         )
 
-class TestEvaluateForwardRefs(BaseTestCase):
+
+class EvaluateForwardRefTests(BaseTestCase):
+    def test_evaluate_forward_ref(self):
+        int_ref = typing_extensions.ForwardRef('int')
+        self.assertIs(typing_extensions.evaluate_forward_ref(int_ref), int)
+        self.assertIs(
+            typing_extensions.evaluate_forward_ref(int_ref, type_params=()),
+            int,
+        )
+        self.assertIs(
+            typing_extensions.evaluate_forward_ref(int_ref, format=typing_extensions.Format.VALUE),
+            int,
+        )
+        self.assertIs(
+            typing_extensions.evaluate_forward_ref(
+                int_ref, format=typing_extensions.Format.FORWARDREF,
+            ),
+            int,
+        )
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(
+                int_ref, format=typing_extensions.Format.STRING,
+            ),
+            'int',
+        )
+
+    def test_evaluate_forward_ref_undefined(self):
+        missing = typing_extensions.ForwardRef('missing')
+        with self.assertRaises(NameError):
+            typing_extensions.evaluate_forward_ref(missing)
+        self.assertIs(
+            typing_extensions.evaluate_forward_ref(
+                missing, format=typing_extensions.Format.FORWARDREF,
+            ),
+            missing,
+        )
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(
+                missing, format=typing_extensions.Format.STRING,
+            ),
+            "missing",
+        )
+
+    def test_evaluate_forward_ref_nested(self):
+        ref = typing_extensions.ForwardRef("Union[int, list['str']]")
+        ns = {"Union": Union}
+        if sys.version_info >= (3, 11):
+            expected = Union[int, list[str]]
+        else:
+            expected = Union[int, list['str']]  # TODO: evaluate nested forward refs in Python < 3.11
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref, globals=ns),
+            expected,
+        )
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(
+                ref, globals=ns, format=typing_extensions.Format.FORWARDREF
+            ),
+            expected,
+        )
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref, format=typing_extensions.Format.STRING),
+            "Union[int, list['str']]",
+        )
+
+        why = typing_extensions.ForwardRef('"\'str\'"')
+        self.assertIs(typing_extensions.evaluate_forward_ref(why), str)
+
+    @skipUnless(sys.version_info >= (3, 10), "Relies on PEP 604")
+    def test_evaluate_forward_ref_nested_pep604(self):
+        ref = typing_extensions.ForwardRef("int | list['str']")
+        if sys.version_info >= (3, 11):
+            expected = int | list[str]
+        else:
+            expected = int | list['str']  # TODO: evaluate nested forward refs in Python < 3.11
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref),
+            expected,
+        )
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref, format=typing_extensions.Format.FORWARDREF),
+            expected,
+        )
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref, format=typing_extensions.Format.STRING),
+            "int | list['str']",
+        )
+
+    def test_evaluate_forward_ref_none(self):
+        none_ref = typing_extensions.ForwardRef('None')
+        self.assertIs(typing_extensions.evaluate_forward_ref(none_ref), None)
+
+    def test_globals(self):
+        A = "str"
+        ref = typing_extensions.ForwardRef('list[A]')
+        with self.assertRaises(NameError):
+            typing_extensions.evaluate_forward_ref(ref)
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref, globals={'A': A}),
+            list[str] if sys.version_info >= (3, 11) else list['str'],
+        )
+
+    def test_owner(self):
+        ref = typing_extensions.ForwardRef("A")
+
+        with self.assertRaises(NameError):
+            typing_extensions.evaluate_forward_ref(ref)
+
+        # We default to the globals of `owner`,
+        # so it no longer raises `NameError`
+        self.assertIs(
+            typing_extensions.evaluate_forward_ref(ref, owner=Loop), A
+        )
+
+    @skipUnless(sys.version_info >= (3, 14), "Not yet implemented in Python < 3.14")
+    def test_inherited_owner(self):
+        # owner passed to evaluate_forward_ref
+        ref = typing_extensions.ForwardRef("list['A']")
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref, owner=Loop),
+            list[A],
+        )
+
+        # owner set on the ForwardRef
+        ref = typing_extensions.ForwardRef("list['A']", owner=Loop)
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref),
+            list[A],
+        )
+
+    @skipUnless(sys.version_info >= (3, 14), "Not yet implemented in Python < 3.14")
+    def test_partial_evaluation(self):
+        ref = typing_extensions.ForwardRef("list[A]")
+        with self.assertRaises(NameError):
+            typing_extensions.evaluate_forward_ref(ref)
+
+        self.assertEqual(
+            typing_extensions.evaluate_forward_ref(ref, format=typing_extensions.Format.FORWARDREF),
+            list[EqualToForwardRef('A')],
+        )
+
     def test_global_constant(self):
         if sys.version_info[:3] > (3, 10, 0):
             self.assertTrue(_FORWARD_REF_HAS_CLASS)
@@ -8969,10 +9194,9 @@ class TestEvaluateForwardRefs(BaseTestCase):
         not_Tx = TypeVar("Tx")  # different TypeVar with same name
         self.assertIs(evaluate_forward_ref(typing.ForwardRef("Tx"), type_params=(not_Tx,), owner=Gen), not_Tx)
 
-        # globals can take higher precedence
-        if _FORWARD_REF_HAS_CLASS:
-            self.assertIs(evaluate_forward_ref(typing.ForwardRef("Tx", is_class=True), owner=Gen, globals={"Tx": str}), str)
-            self.assertIs(evaluate_forward_ref(typing.ForwardRef("Tx", is_class=True), owner=Gen, type_params=(not_Tx,), globals={"Tx": str}), str)
+        # globals do not take higher precedence
+        self.assertIs(evaluate_forward_ref(typing.ForwardRef("Tx", is_class=True), owner=Gen, globals={"Tx": str}), Tx)
+        self.assertIs(evaluate_forward_ref(typing.ForwardRef("Tx", is_class=True), owner=Gen, type_params=(not_Tx,), globals={"Tx": str}), not_Tx)
 
         with self.assertRaises(NameError):
             evaluate_forward_ref(typing.ForwardRef("alias"), type_params=Gen.__type_params__)
@@ -9071,30 +9295,17 @@ class TestEvaluateForwardRefs(BaseTestCase):
             self.assertEqual(get_args(evaluated_ref3), (Z[str],))
 
     def test_invalid_special_forms(self):
-        # tests _lax_type_check to raise errors the same way as the typing module.
-        # Regex capture "< class 'module.name'> and "module.name"
-        with self.assertRaisesRegex(
-            TypeError, r"Plain .*Protocol('>)? is not valid as type argument"
-        ):
-            evaluate_forward_ref(typing.ForwardRef("Protocol"), globals=vars(typing))
-        with self.assertRaisesRegex(
-            TypeError, r"Plain .*Generic('>)? is not valid as type argument"
-        ):
-            evaluate_forward_ref(typing.ForwardRef("Generic"), globals=vars(typing))
-        with self.assertRaisesRegex(TypeError, r"Plain typing(_extensions)?\.Final is not valid as type argument"):
-            evaluate_forward_ref(typing.ForwardRef("Final"), globals=vars(typing))
-        with self.assertRaisesRegex(TypeError, r"Plain typing(_extensions)?\.ClassVar is not valid as type argument"):
-            evaluate_forward_ref(typing.ForwardRef("ClassVar"), globals=vars(typing))
+        for name in ("Protocol", "Final", "ClassVar", "Generic"):
+            with self.subTest(name=name):
+                self.assertIs(
+                    evaluate_forward_ref(typing.ForwardRef(name), globals=vars(typing)),
+                    getattr(typing, name),
+                )
         if _FORWARD_REF_HAS_CLASS:
             self.assertIs(evaluate_forward_ref(typing.ForwardRef("Final", is_class=True), globals=vars(typing)), Final)
             self.assertIs(evaluate_forward_ref(typing.ForwardRef("ClassVar", is_class=True), globals=vars(typing)), ClassVar)
-            with self.assertRaisesRegex(TypeError, r"Plain typing(_extensions)?\.Final is not valid as type argument"):
-                evaluate_forward_ref(typing.ForwardRef("Final", is_argument=False), globals=vars(typing))
-            with self.assertRaisesRegex(TypeError, r"Plain typing(_extensions)?\.ClassVar is not valid as type argument"):
-                evaluate_forward_ref(typing.ForwardRef("ClassVar", is_argument=False), globals=vars(typing))
-        else:
-            self.assertIs(evaluate_forward_ref(typing.ForwardRef("Final", is_argument=False), globals=vars(typing)), Final)
-            self.assertIs(evaluate_forward_ref(typing.ForwardRef("ClassVar", is_argument=False), globals=vars(typing)), ClassVar)
+        self.assertIs(evaluate_forward_ref(typing.ForwardRef("Final", is_argument=False), globals=vars(typing)), Final)
+        self.assertIs(evaluate_forward_ref(typing.ForwardRef("ClassVar", is_argument=False), globals=vars(typing)), ClassVar)
 
 
 class TestSentinels(BaseTestCase):
