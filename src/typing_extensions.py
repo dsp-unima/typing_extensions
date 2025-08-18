@@ -14,6 +14,8 @@ import types as _types
 import typing
 import warnings
 
+# Fooo 2
+
 # Breakpoint: https://github.com/python/cpython/pull/119891
 if sys.version_info >= (3, 14):
     import annotationlib
