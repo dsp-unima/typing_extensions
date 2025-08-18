@@ -48,4 +48,3 @@ jobs:
           recreate: true
           path: code-coverage-results.md
           number: ${{ env.pr_number }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
