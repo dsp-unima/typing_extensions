@@ -198,4 +198,5 @@ jobs:
         with:
           recreate: true
           path: code-coverage-results.md
+        env:
           GITHUB_TOKEN: ${{ secrets.POST_TOKEN }}
