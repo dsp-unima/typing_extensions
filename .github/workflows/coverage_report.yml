@@ -18,13 +18,18 @@ jobs:
     if: >
       github.event.workflow_run.event == 'pull_request'
     steps:
+    - name: Print event data:
+      run: |
+          echo {{ $github.event.workflow}}
+          echo {{ $github.event.workflow_run}}
     - name: Get PR number from commit SHA
       id: get_pr
+      continue-on-error: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         SHA="${{ github.event.workflow_run.head_sha }}"
-        REPO="${{ github.event.workflow_run.head_repository }}"
+        REPO="${{ github.repository }}"
         echo query URL $("https://api.github.com/repos/$REPO/commits/$SHA/pulls")
         PR_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
           "https://api.github.com/repos/$REPO/commits/$SHA/pulls" \
@@ -38,6 +43,7 @@ jobs:
         echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
     - name: Determine PR number
       id: pr-info
+      continue-on-error: true
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
