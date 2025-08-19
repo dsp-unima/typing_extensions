@@ -49,7 +49,108 @@ jobs:
         else
           echo "Trying to find PR from commit SHA..."
           PR_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" 
-            -H "Accept: application/vnd.github.groot-preview+json" 
+            -H "Accept: application/vnd.github.groot-name: Add coverage comment on PR
+
+on:
+  workflow_run:
+    workflows: ["Test and lint"]
+    types:
+      - completed
+      
+permissions: {}
+
+jobs:
+  cov-report:
+    permissions:
+        contents: read
+        pull-requests: write
+    runs-on: ubuntu-latest
+    if: >
+      github.event.workflow_run.event == 'pull_request'
+    steps:
+      - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        id: get_pr_data
+        with:
+          script: |
+              return (
+                await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                  commit_sha: context.sha,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                })
+              ).data[0];
+      - name: Pull Request data
+        run: |
+          echo '${{ fromJson(steps.get_pr_data.outputs.result).number }}'
+          echo '${{ fromJson(steps.get_pr_data.outputs.result).title }}'
+      - name: Get PR number from commit SHA
+        id: get_pr
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN  }}
+        run: |
+          SHA="${{ github.event.workflow_run.head_sha }}"
+          REPO="${{ github.repository }}"
+          echo 'URL$("https://api.github.com/repos/$REPO/commits/$SHA/pulls")'
+          PR_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$REPO/commits/$SHA/pulls" \
+            -H "Accept: application/vnd.github.groot-preview+json")
+          echo "$PR_DATA"  # remove might reveal sensitive data
+          PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
+          if [ "$PR_NUMBER" = "null" ] || [ -z "$PR_NUMBER" ]; then
+            echo "Error: No pull request found for commit $SHA"
+          fi
+          echo "PR number is $PR_NUMBER"
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+      - name: Determine PR number
+        id: pr-info
+        continue-on-error: true
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Trying to find PR from commit SHA..."
+            PR_URL=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" 
+              -H "Accept: application/vnd.github.groot-preview+json" 
+              https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls 
+              | jq -r '.[0].url')
+
+            if [ "$PR_URL" = "null" ] || [ -z "$PR_URL" ]; then
+              echo "No PR associated with commit."
+              echo "pr_number=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            PR_NUMBER=$(basename "$PR_URL")
+            echo "Found PR #$PR_NUMBER"
+            echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage.xml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Code Coverage Report
+        uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # v1.3.0
+        with:
+          filename: coverage/coverage.xml
+          badge: true
+          fail_below_min: false
+          format: markdown
+          hide_branch_rate: false
+          hide_complexity: true
+          indicators: true
+          output: both
+          thresholds: '80 90'
+      - name: Add Coverage PR Comment
+        uses: marocchino/sticky-pull-request-comment@52423e01640425a022ef5fd42c6fb5f633a02728  # v2.9.3
+        with:
+          recreate: true
+          path: code-coverage-results.md
+          number: ${{ steps.get_pr.outputs.pr_number }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+preview+json" 
             https://api.github.com/repos/${{ github.repository }}/commits/${{ github.sha }}/pulls 
             | jq -r '.[0].url')
 
