@@ -23,13 +23,15 @@ jobs:
           script: |
               return (
                 await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                  commit_sha: context.sha,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
+                  commit_sha: github.event.workflow_run.head_sha,
+                  owner: github.repository_owner,
+                  repo: github.repository,
                 })
               ).data[0];
       - name: Pull Request data
         run: |
+          echo ${{ steps.get_pr_data.outputs.result }}
+          echo "-----"
           echo '${{ fromJson(steps.get_pr_data.outputs.result).number }}'
           echo '${{ fromJson(steps.get_pr_data.outputs.result).title }}'
       - name: Get PR number from commit SHA
