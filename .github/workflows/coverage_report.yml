@@ -39,11 +39,16 @@ jobs:
         id: get_pr_data
         continue-on-error: true
         run: |
-          echo ${{ steps.get_pr_data_a.outputs.pr_number }}
+          echo ${{ steps.get_pr_data_a.outputs }}
+          echo "------"
           echo ${{ steps.get_pr_data_0.outputs }}
-          echo ${{ fromJson(steps.get_pr_data_0.outputs).items }}
-          echo ${{ fromJson(steps.get_pr_data_a.outputs).items }}
           echo "pr_number=${{ steps.get_pr_data_a.outputs.pr_number }}" >> $GITHUB_OUTPUT
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage.xml
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
       - name: Check PR and file
         continue-on-error: true
         run: |
@@ -52,13 +57,6 @@ jobs:
           ls coverage.xml
           ls coverage.xml*
           ls coverage.xml/
-         
-      - name: Download coverage report
-        uses: actions/download-artifact@v4
-        with:
-          pattern: coverage.xml
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ github.event.workflow_run.id }}
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # v1.3.0
         with:
