@@ -36,7 +36,10 @@ jobs:
   
   post-comment:
     runs-on: ubuntu-latest
-    permissions: {}
+    needs: get-pr-number
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Download coverage report
         uses: actions/download-artifact@v4
@@ -64,5 +67,5 @@ jobs:
         with:
           recreate: true
           path: code-coverage-results.md
-          number: ${{ needs.prepare-report.outputs.pr_number }}
+          number: ${{ needs.get-pr-number.outputs.pr_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
