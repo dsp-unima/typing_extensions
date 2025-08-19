@@ -23,9 +23,9 @@ jobs:
           script: |
               return (
                 await github.rest.repos.listPullRequestsAssociatedWithCommit({
-                  commit_sha: github.event.workflow_run.head_sha,
-                  owner: github.repository_owner,
-                  repo: github.repository,
+                  commit_sha: "${{ github.event.workflow_run.head_sha }}",
+                  owner: "${{ github.repository_owner }}",
+                  repo: "${{ github.repository }}",
                 })
               ).data[0];
       - name: Pull Request data
