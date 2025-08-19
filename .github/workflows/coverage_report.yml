@@ -19,44 +19,14 @@ jobs:
     steps:
       - name: script get number
         id: get_pr_data
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            // Step 1: Find the PR associated with the current commit
-            return (await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner: "${{ github.repository }}".split('/')[0],
-              repo: "${{ github.repository }}".split('/')[1],
-              commit_sha: "${{ github.event.workflow_run.head_sha }}",
-            })).data[0].number;
-      - name: Pull Request data
-        continue-on-error: true
         run: |
-          echo ${{ steps.get_pr_data.outputs.result }}
-          echo "-----"
-          echo '${{ fromJson(steps.get_pr_data.outputs.result).number }}'
-          echo '${{ fromJson(steps.get_pr_data.outputs.result).title }}'
-      - name: Get PR number from commit SHA
-        id: get_pr
-        env:
-          # token might be wrong
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          REPO="${{ github.repository }}"
-          PR_DATA=$(curl -L \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/$REPO/commits/$SHA/pulls \
-          )
-          echo "$PR_DATA"  # remove might reveal sensitive data
-          PR_NUMBER=$(echo "$PR_DATA" | jq '.[0].number')
-          if [ "$PR_NUMBER" = "null" ] || [ -z "$PR_NUMBER" ]; then
-            echo "Error: No pull request found for commit $SHA"
-          fi
-          echo "PR number is $PR_NUMBER"
-          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          PR_DATA=$(curl https://api.github.com/search/issues?q=repo:${{github.repository}}+type:pr+sha:${{github.event.workflow_run.head_sha}})
+          echo "result=$PR_DATA" >> $GITHUB_OUTPUT
+          echo ${{ steps.get_pr_data.outputs }}
+          echo ${{ fromJson(steps.get_pr_data.outputs.items) }}
+          echo ${{ fromJson(steps.get_pr_data.outputs).items[0] }}
+          echo ${{ fromJson(steps.get_pr_data.outputs).items[0].number }}
+          echo "pr_number=${{ fromJson(steps.get_pr_data.outputs).items[0].number }}" >> $GITHUB_OUTPUT
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
