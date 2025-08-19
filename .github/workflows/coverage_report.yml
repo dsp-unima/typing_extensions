@@ -9,11 +9,9 @@ on:
 permissions: {}
 
 jobs:
-  prepare-report:
-    permissions:
-      contents: read
-      pull-requests: read
+  get-pr-number:
     runs-on: ubuntu-latest
+    permissions: {}
     if: >
       github.event.workflow_run.event == 'pull_request'
       && github.repository == github.event.workflow_run.repository.full_name
@@ -35,6 +33,11 @@ jobs:
           fi
           PR_NUMBER=$(jq '.items[0].number' <<< "$PR_DATA")
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+  
+  post-comment:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
@@ -56,18 +59,10 @@ jobs:
       - name: Pipe coverage report
         id: markdown_file
         run: echo "message=$(cat code-coverage-results.md)" >> $GITHUB_OUTPUT
-
-  post-comment:
-    needs: prepare-report
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
       - name: Add Coverage PR Comment
         uses: marocchino/sticky-pull-request-comment@52423e01640425a022ef5fd42c6fb5f633a02728  # v2.9.3
         with:
           recreate: true
-          message: ${{ needs.prepare-report.outputs.message }}
+          path: code-coverage-results.md
           number: ${{ needs.prepare-report.outputs.pr_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
