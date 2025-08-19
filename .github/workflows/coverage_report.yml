@@ -40,19 +40,15 @@ jobs:
           echo ${{ steps.get_pr_data_a.outputs.pr_number }}
           echo ${{ steps.get_pr_data_0.outputs }}
           echo ${{ fromJson(steps.get_pr_data_0.outputs).items }}
-          echo ${{ fromJson(steps.get_pr_data_0.outputs).items[0] }}
-          echo ${{ fromJson(steps.get_pr_data_0.outputs).items[0].number }}
-          echo "pr_number=${{ fromJson(steps.get_pr_data_0.outputs).items[0].number }}" >> $GITHUB_OUTPUT
+          # echo ${{ fromJson(steps.get_pr_data_0.outputs).items[0] }}
+          # echo ${{ fromJson(steps.get_pr_data_0.outputs).items[0].number }}
+          echo "pr_number=${{ steps.get_pr_data_a.outputs.pr_number }}" >> $GITHUB_OUTPUT
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
           pattern: coverage.xml
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
-      - name: check output
-        run: |
-          ls -a
-          ls coverage -a
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # v1.3.0
         with:
