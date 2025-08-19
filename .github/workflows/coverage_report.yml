@@ -17,17 +17,8 @@ jobs:
     if: >
       github.event.workflow_run.event == 'pull_request'
     steps:
-      - name: script get number
-        id: get_pr_data_0
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const prData = await github.request(
-              `GET /search/issues?q=repo:${{ github.repository }}+type:pr+sha:${{ github.event.workflow_run.head_sha }}`
-            );
-            return prData
-      - name: script get number
-        id: get_pr_data_a
+      - name: Get PR number
+        id: get_pr_number
         run: |
           PR_DATA=$(curl -s https://api.github.com/search/issues?q=repo:${{github.repository}}+type:pr+sha:${{github.event.workflow_run.head_sha}} | jq -c '.')
           ITEMS_COUNT=$(jq '.items | length' <<< "$PR_DATA")
@@ -38,14 +29,6 @@ jobs:
           fi
           PR_NUMBER=$(jq '.items[0].number' <<< "$PR_DATA")
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-      - name: process PR data
-        id: get_pr_data
-        continue-on-error: true
-        run: |
-          echo ${{ steps.get_pr_data_a.outputs }}
-          echo "------"
-          echo ${{ steps.get_pr_data_0.outputs }}
-          echo "pr_number=${{ steps.get_pr_data_a.outputs.pr_number }}" >> $GITHUB_OUTPUT
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
@@ -55,7 +38,7 @@ jobs:
       - name: Check PR and file
         continue-on-error: true
         run: |
-          echo "PR_NUMBER=${{ steps.get_pr_data.outputs.pr_number }}"
+          echo "PR_NUMBER=${{ steps.get_pr_number.outputs.pr_number }}"
           ls 
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # v1.3.0
@@ -74,5 +57,5 @@ jobs:
         with:
           recreate: true
           path: code-coverage-results.md
-          number: ${{ steps.get_pr.outputs.pr_number }}
+          number: ${{ steps.get_pr_number.outputs.pr_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
