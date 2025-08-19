@@ -25,8 +25,8 @@ jobs:
           script: |
             // Step 1: Find the PR associated with the current commit
             const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              owner: "${{ github.repository }}"".split('/')[0],
-              repo: ${{ github.repository }}"".split('/')[1],
+              owner: "${{ github.repository }}".split('/')[0],
+              repo: "${{ github.repository }}".split('/')[1],
               commit_sha: ${{ github.event.workflow_run.head_sha }},
             });
       - name: Pull Request data
