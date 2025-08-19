@@ -30,7 +30,7 @@ jobs:
       run: |
         SHA="${{ github.event.workflow_run.head_sha }}"
         REPO="${{ github.repository }}"
-        echo query URL $("https://api.github.com/repos/$REPO/commits/$SHA/pulls")
+        echo 'URL$("https://api.github.com/repos/$REPO/commits/$SHA/pulls")'
         PR_DATA=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
           "https://api.github.com/repos/$REPO/commits/$SHA/pulls" \
           -H "Accept: application/vnd.github.groot-preview+json")
