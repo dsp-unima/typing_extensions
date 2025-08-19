@@ -38,9 +38,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: coverage*
+          path: .
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
-      - name: CHeck files
+      - name: Check files
         run: |
           ls -a
           echo "...."
