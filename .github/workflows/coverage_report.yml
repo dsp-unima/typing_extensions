@@ -33,7 +33,8 @@ jobs:
           fi
           PR_NUMBER=$(jq '.items[0].number' <<< "$PR_DATA")
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "PR number: $PR_NUMBER"
+    outputs:
+      pr_number: ${{ steps.get_pr_number.outputs.pr_number }}
   
   create-md-comment:
     runs-on: ubuntu-latest
@@ -73,9 +74,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: code-coverage-results
-      - name: check pr number
-        run: |
-          echo "PR number: ${{ needs.get-pr-number.outputs.pr_number }}"
       - name: Add Coverage PR Comment
         uses: marocchino/sticky-pull-request-comment@52423e01640425a022ef5fd42c6fb5f633a02728  # v2.9.3
         with:
