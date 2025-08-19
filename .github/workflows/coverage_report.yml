@@ -31,7 +31,7 @@ jobs:
             });
       - name: Pull Request data
         run: |
-          echo ${{ steps.get_pr_data.outputs.result }}
+          echo ${{ steps.get_pr_data.outputs }}
           echo "-----"
           echo '${{ fromJson(steps.get_pr_data.outputs.result).number }}'
           echo '${{ fromJson(steps.get_pr_data.outputs.result).title }}'
