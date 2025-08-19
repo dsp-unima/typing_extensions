@@ -36,8 +36,10 @@ jobs:
   
   create-md-comment:
     runs-on: ubuntu-latest
-    needs: get-pr-number
     permissions: {}
+    if: >
+      github.event.workflow_run.event == 'pull_request'
+      && github.repository == github.event.workflow_run.repository.full_name
     steps:
       - name: Download coverage report
         uses: actions/download-artifact@v4
@@ -57,17 +59,23 @@ jobs:
           indicators: true
           output: both
           thresholds: '80 90'
-      - name: Pipe coverage report
-        id: markdown_file
-        run: echo "message=$(cat code-coverage-results.md)" >> $GITHUB_OUTPUT
+      - name: Upload coverage summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-coverage-results
+          path: code-coverage-results.md
   post-comment:
     runs-on: ubuntu-latest
     needs: [get-pr-number, create-md-comment]
     steps:
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: code-coverage-results
       - name: Add Coverage PR Comment
         uses: marocchino/sticky-pull-request-comment@52423e01640425a022ef5fd42c6fb5f633a02728  # v2.9.3
         with:
           recreate: true
-          message: ${{ needs.create-md-comment.outputs.message }}
+          path: code-coverage-results.md
           number: ${{ needs.get-pr-number.outputs.pr_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
