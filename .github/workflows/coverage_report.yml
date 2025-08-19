@@ -19,7 +19,6 @@ jobs:
     steps:
       - name: Get PR number from commit SHA
         id: get_pr
-        continue-on-error: true
         run: |
           SHA="${{ github.event.workflow_run.head_sha }}"
           REPO="${{ github.repository }}"
@@ -54,6 +53,10 @@ jobs:
           indicators: true
           output: both
           thresholds: '80 90'
+      - name: check output
+        run: |
+          ls -a
+          ls coverage -a
       - name: Add Coverage PR Comment
         uses: marocchino/sticky-pull-request-comment@52423e01640425a022ef5fd42c6fb5f633a02728  # v2.9.3
         with:
