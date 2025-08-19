@@ -21,7 +21,6 @@ jobs:
         run: |
           echo "Workflow run event: ${{ github.event.workflow_run.created_at }}"
           echo "triggering actor: ${{ github.event.workflow_run.triggering_actor }}"
-          echo "${{ fromJson(github.event.workflow_run) }}"
       - uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
         id: get_pr_data
         with:
