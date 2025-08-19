@@ -9,9 +9,11 @@ on:
 permissions: {}
 
 jobs:
-  get-pr-number:
+  cov-report:
+    permissions:
+        contents: read
+        pull-requests: write
     runs-on: ubuntu-latest
-    permissions: {}
     if: >
       github.event.workflow_run.event == 'pull_request'
       && github.repository == github.event.workflow_run.repository.full_name
@@ -21,19 +23,17 @@ jobs:
         id: get_pr_number
         env:
           SHA: "${{ github.event.workflow_run.head_sha }}"
-          REPO: "${{ github.repository }}"
+          REPO: "${{github.repository}}"
         run: |
-          # Query GitHub API to find the PR number associated with the head commit SHA
-          PR_DATA=$(curl -s "https://api.github.com/search/issues?q=repo:$REPO+type:pr+sha:$SHA")
-          # Check if head commit is on a single PR else ambiguous which PR triggered the workflow
+          PR_DATA=$(curl -s "https://api.github.com/search/issues?q=repo:$REPO+type:pr+sha:$SHA" | jq -c '.')
           ITEMS_COUNT=$(jq '.items | length' <<< "$PR_DATA")
+          # Check if head commit is on a single PR else ambiguous which PR triggered the workflow
           if [ "$ITEMS_COUNT" -ne 1 ]; then
             echo "Error: Expected exactly one PR, but found $ITEMS_COUNT." >&2
             exit 1
           fi
           PR_NUMBER=$(jq '.items[0].number' <<< "$PR_DATA")
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-  
       - name: Download coverage report
         uses: actions/download-artifact@v4
         with:
@@ -52,13 +52,10 @@ jobs:
           indicators: true
           output: both
           thresholds: '80 90'
-      - name: Pipe coverage report
-        id: markdown_file
-        run: echo "message=$(cat code-coverage-results.md)" >> $GITHUB_OUTPUT
       - name: Add Coverage PR Comment
         uses: marocchino/sticky-pull-request-comment@52423e01640425a022ef5fd42c6fb5f633a02728  # v2.9.3
         with:
           recreate: true
           path: code-coverage-results.md
-          number: ${{ needs.get-pr-number.outputs.pr_number }}
+          number: ${{ steps.get_pr_number.outputs.pr_number }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
