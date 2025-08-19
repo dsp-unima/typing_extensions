@@ -29,11 +29,14 @@ jobs:
       - name: script get number
         id: get_pr_data_a
         run: |
-          PR_DATA=$(curl -s https://api.github.com/search/issues?q=repo:${{github.repository}}+type:pr+sha:${{github.event.workflow_run.head_sha}})
-          echo "pR data is: $PR_DATA"
-          PR_DATA=$(jq -c '.' <<< "$PR_DATA")
-          PR_NUMBER=$(echo "$PR_DATA" | jq '.items[0].number')
-          echo "PR_DATA=$PR_DATA" >> $GITHUB_OUTPUT
+          PR_DATA=$(curl -s https://api.github.com/search/issues?q=repo:${{github.repository}}+type:pr+sha:${{github.event.workflow_run.head_sha}} | jq -c '.')
+          ITEMS_COUNT=$(jq '.items | length' <<< "$PR_DATA")
+          # Check if head commit is on a single PR else ambiguous which PR triggered the workflow
+          if [ "$ITEMS_COUNT" -ne 1 ]; then
+            echo "Error: Expected exactly one PR, but found $ITEMS_COUNT." >&2
+            exit 1
+          fi
+          PR_NUMBER=$(jq '.items[0].number' <<< "$PR_DATA")
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
       - name: process PR data
         id: get_pr_data
@@ -54,13 +57,10 @@ jobs:
         run: |
           echo "PR_NUMBER=${{ steps.get_pr_data.outputs.pr_number }}"
           ls 
-          ls coverage.xml
-          ls coverage.xml*
-          ls coverage.xml/
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # v1.3.0
         with:
-          filename: coverage/coverage.xml
+          filename: coverage.xml
           badge: true
           fail_below_min: false
           format: markdown
