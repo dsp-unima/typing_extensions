@@ -41,7 +41,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ github.event.workflow_run.id }}
       - name: CHeck files
-        run: ls
+        run: |
+          ls -a
+          echo "...."
+          ls coverage
       - name: Code Coverage Report
         uses: irongut/CodeCoverageSummary@51cc3a756ddcd398d447c044c02cb6aa83fdae95 # v1.3.0
         with:
