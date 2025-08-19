@@ -22,10 +22,10 @@ jobs:
         run: |
           PR_DATA=$(curl https://api.github.com/search/issues?q=repo:${{github.repository}}+type:pr+sha:${{github.event.workflow_run.head_sha}})
           echo "result=$PR_DATA" >> $GITHUB_OUTPUT
+          echo "pR data is: $PR_DATA"
       - name: process PR data
         id: get_pr_data
         run: |
-          echo "pR data is: $PR_DATA"
           echo ${{ steps.get_pr_data_a.outputs }}
           echo ${{ fromJson(steps.get_pr_data_a.outputs.items) }}
           echo ${{ fromJson(steps.get_pr_data_a.outputs).items[0] }}
