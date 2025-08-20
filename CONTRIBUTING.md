@@ -24,10 +24,12 @@ Starting with version 4.0.0, `typing_extensions` uses
 [Semantic Versioning](https://semver.org/). See the documentation
 for more detail.
 
+
 ## Development version
 After a release the version is increased once in [pyproject.toml](/pyproject.toml) and
 appended with a `.dev` suffix, e.g. `4.0.1.dev`.
 Further subsequent updates are not planned between releases.
+
 
 # Type stubs
 
@@ -84,7 +86,7 @@ pipx run pre-commit run -a
 # Workflow for PyPI releases
 
 - Make sure you follow the versioning policy in the documentation
-  (e.g., release candidates before any feature release, do not release development versions)
+Fooo
 
 - Ensure that GitHub Actions reports no errors.
 
