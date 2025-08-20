@@ -151,7 +151,7 @@ jobs:
     permissions:
       pull-requests: write
 
-    if: ${{ needs.tests.outputs.cov_uploaded != '' }}
+    if: ${{ always() && needs.tests.outputs.cov_uploaded != '' }}
 
     steps:
       - uses: actions/checkout@v4
