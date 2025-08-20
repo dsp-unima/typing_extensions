@@ -14,6 +14,8 @@ import types as _types
 import typing
 import warnings
 
+# Fooo 2
+
 # Breakpoint: https://github.com/python/cpython/pull/119891
 if sys.version_info >= (3, 14):
     import annotationlib
@@ -2065,6 +2067,12 @@ else:
                     return tuple(_unpack_args(*(n for n in value)))
                 return value
 
+            def __getitem__(self, args):
+                value = super().__getitem__(args)
+                if isinstance(value, tuple) and any(_is_unpack(t) for t in value):
+                    return tuple(_unpack_args(*(n for n in value)))
+                return value
+
 
 # 3.9.2
 class _EllipsisDummy: ...
@@ -2496,6 +2504,18 @@ else:  # <=3.11
 
     def _is_unpack(obj):
         return isinstance(obj, _UnpackAlias)
+
+
+
+def _unpack_args(*args):
+    newargs = []
+    for arg in args:
+        subargs = getattr(arg, '__typing_unpacked_tuple_args__', None)
+        if subargs is not None and (not (subargs and subargs[-1] is ...)):
+            newargs.extend(subargs)
+        else:
+            newargs.append(arg)
+    return newargs
 
 
 def _unpack_args(*args):
@@ -2989,6 +3009,7 @@ else:
                     "@deprecated decorator with non-None category must be applied to "
                     f"a class or callable, not {arg!r}"
                 )
+
 
 # Breakpoint: https://github.com/python/cpython/pull/23702
 if sys.version_info < (3, 10):

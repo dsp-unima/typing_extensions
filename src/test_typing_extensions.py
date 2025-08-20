@@ -5876,6 +5876,8 @@ class ParamSpecTests(BaseTestCase):
                 G10 = klass[int, Concatenate[str, P]]
                 with self.subTest("Check invalid form substitution"):
                     self.assertEqual(G10.__parameters__, (P, ))
+                    if sys.version_info < (3, 9):
+                        self.skipTest("3.8 typing._type_subst does not support this substitution process")
                     H10 = G10[int]
                     if (3, 10) <= sys.version_info < (3, 11, 3):
                         self.skipTest("3.10-3.11.2 does not substitute Concatenate here")
