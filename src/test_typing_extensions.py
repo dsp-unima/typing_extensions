@@ -6565,7 +6565,6 @@ class NamedTupleTests(BaseTestCase):
         a = A(1, [2])
         self.assertIs(type(a), Group)
         self.assertEqual(a, (1, [2]))
-        assert False # Test if coverage is still triggered
 
     @skipIf(TYPING_3_9_0, "Test isn't relevant to 3.9+")
     def test_non_generic_subscript_error_message_py38(self):
